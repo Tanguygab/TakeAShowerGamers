@@ -1,0 +1,7 @@
+name: TakeAShowerGamers
+version: '${version}'
+main: io.github.tanguygab.takeashowergamers.TakeAShowerGamers
+api-version: '1.20'
+softdepend: [TouchGrass, GetALife]
+authors: [Tanguygab]
+description: Gamers, you gotta take some showers people
