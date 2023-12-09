@@ -19,7 +19,8 @@ public final class TakeAShowerGamers extends JavaPlugin {
     public final Map<UUID, LocalDateTime> leftAt = new HashMap<>();
 
     private int minutesDelay;
-    private String sound;
+    private Sound sound;
+    private String customSound;
     private final List<String> commands = new ArrayList<>();
     private final List<String> commandsOnShower = new ArrayList<>();
 
@@ -41,8 +42,9 @@ public final class TakeAShowerGamers extends JavaPlugin {
         reloadConfig();
 
         minutesDelay = getConfig().getInt("minutes-delay",15);
-        sound = getConfig().getString("sound", "BLOCK_NOTE_BLOCK_PLING");
-
+        customSound = getConfig().getString("sound", "BLOCK_NOTE_BLOCK_PLING");
+        try {sound = Sound.valueOf(customSound);}
+        catch (Exception ignored) {}
         commands.addAll(getConfig().getStringList("commands"));
         commandsOnShower.addAll(getConfig().getStringList("commands-on-shower"));
 
@@ -61,7 +63,9 @@ public final class TakeAShowerGamers extends JavaPlugin {
             if (getLastShower(uuid) < minutesDelay || didntShower.contains(uuid)) return;
 
             msg(player,"&cYou gotta take a shower man!");
-            if (sound != null && !sound.isEmpty()) player.playSound(player.getLocation(),sound,1,1);
+            if (sound != null) player.playSound(player.getLocation(),sound,1,1);
+            else if (customSound != null && !customSound.isEmpty())
+                player.playSound(player.getLocation(),customSound,1,1);
             gamerNeedsAShower(player,10);
 
 
