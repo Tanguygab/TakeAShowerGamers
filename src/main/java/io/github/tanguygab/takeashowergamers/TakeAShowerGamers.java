@@ -1,65 +1,92 @@
 package io.github.tanguygab.takeashowergamers;
 
+import me.clip.placeholderapi.PlaceholderAPI;
 import org.bukkit.ChatColor;
+import org.bukkit.Sound;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.potion.PotionEffect;
-import org.bukkit.potion.PotionEffectType;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 public final class TakeAShowerGamers extends JavaPlugin {
 
-    private final int delay = 15;
-    private final Map<UUID, LocalDateTime> lastShowers = new HashMap<>();
+    public final List<UUID> didntShower = new ArrayList<>();
+    public final Map<UUID, LocalDateTime> lastShowers = new HashMap<>();
+    public final Map<UUID, LocalDateTime> leftAt = new HashMap<>();
 
-    private LocalDateTime now() {
+    private int minutesDelay;
+    private String sound;
+    private final List<String> commands = new ArrayList<>();
+    private final List<String> commandsOnShower = new ArrayList<>();
+
+    public LocalDateTime now() {
         return LocalDateTime.now();
+    }
+    public void clean(UUID uuid) {
+        didntShower.remove(uuid);
+        lastShowers.put(uuid,now());
+        leftAt.remove(uuid);
+    }
+    private void runCommands(Player player, List<String> commands) {
+        commands.forEach(cmd->getServer().dispatchCommand(getServer().getConsoleSender(),color(PlaceholderAPI.setPlaceholders(player,cmd))));
     }
 
     @Override
     public void onEnable() {
-        getServer().getScheduler().scheduleSyncRepeatingTask(this,()->{
-            getServer().getOnlinePlayers().forEach(player->{
-                if (player.isInWater()) {
-                    lastShowers.put(player.getUniqueId(),now());
+        saveDefaultConfig();
+        reloadConfig();
 
-                    if (player.hasPotionEffect(PotionEffectType.UNLUCK)) {
-                        msg(player,"&aYou took a shower and washed off that gamer smell! Now go &2outside &asmh...");
-                        player.removePotionEffect(PotionEffectType.UNLUCK);
-                    }
-                    return;
+        minutesDelay = getConfig().getInt("minutes-delay",15);
+        sound = getConfig().getString("sound", "BLOCK_NOTE_BLOCK_PLING");
+
+        commands.addAll(getConfig().getStringList("commands"));
+        commandsOnShower.addAll(getConfig().getStringList("commands-on-shower"));
+
+        getServer().getScheduler().scheduleSyncRepeatingTask(this,()->
+                getServer().getOnlinePlayers().forEach(player->{
+            UUID uuid = player.getUniqueId();
+            if (player.isInWater()) {
+                if (didntShower.contains(uuid)) {
+                    msg(player,"&aYou took a shower and washed off that gamer smell! Now go &2outside &asmh...");
+                    runCommands(player,commandsOnShower);
                 }
+                clean(uuid);
+                return;
+            }
 
-                if (getLastShower(player) < delay) return;
+            if (getLastShower(uuid) < minutesDelay || didntShower.contains(uuid)) return;
 
-                msg(player,"&cYou gotta take a shower man!");
-                gamerNeedsAShower(player,10);
+            msg(player,"&cYou gotta take a shower man!");
+            if (sound != null && !sound.isEmpty()) player.playSound(player.getLocation(),sound,1,1);
+            gamerNeedsAShower(player,10);
 
 
-            });
-
-        },0,1200);
+        }),0,1200);
     }
 
-    private void msg(Player player, String msg) {
-        player.sendMessage(ChatColor.translateAlternateColorCodes('&',msg));
+    private String color(String text) {
+        return ChatColor.translateAlternateColorCodes('&',text);
+    }
+    private void msg(CommandSender sender, String msg) {
+        sender.sendMessage(color(msg));
     }
 
     private void gamerNeedsAShower(Player player, int secondsLeft) {
         getServer().getScheduler().runTaskLater(this,()->{
+            if (player == null || !player.isOnline()) return;
             if (player.isInWater()) {
-                lastShowers.put(player.getUniqueId(),now());
+                clean(player.getUniqueId());
                 msg(player,"&aOmg, da gamer took da shower! Now go touch &2grass&a...");
                 return;
             }
             if (secondsLeft <= 0) {
                 msg(player,"&4You have been cursed by the Shower God!");
-                player.addPotionEffect(new PotionEffect(PotionEffectType.UNLUCK,-1,255,false));
+                didntShower.add(player.getUniqueId());
+                runCommands(player,commands);
                 return;
             }
             msg(player,"&cYou have "+secondsLeft+" seconds left to take a shower");
@@ -67,18 +94,67 @@ public final class TakeAShowerGamers extends JavaPlugin {
         },secondsLeft == 5 ? 100 : 20);
     }
 
-    private double getLastShower(Player player) {
-        if (!lastShowers.containsKey(player.getUniqueId())) {
-            lastShowers.put(player.getUniqueId(),now());
+    private long getLastShower(UUID uuid) {
+        if (!lastShowers.containsKey(uuid)) {
+            clean(uuid);
             return 0;
         }
-        LocalDateTime lastShower = lastShowers.get(player.getUniqueId());
+        LocalDateTime lastShower = lastShowers.get(uuid);
+
+        if (leftAt.containsKey(uuid)) {
+            LocalDateTime leftAtTime = leftAt.get(uuid);
+            return ChronoUnit.SECONDS.between(lastShower, leftAtTime)
+                    +ChronoUnit.SECONDS.between(leftAtTime, now());
+        }
         return ChronoUnit.SECONDS.between(lastShower, now());
     }
 
     @Override
     public void onDisable() {
         lastShowers.clear();
+        leftAt.clear();
+        didntShower.clear();
+        commands.clear();
+        commandsOnShower.clear();
+        getServer().getScheduler().cancelTasks(this);
     }
 
+    @Override
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        String arg = args.length == 0 ? "" : args[0];
+
+        switch (arg) {
+            case "reload" -> {
+                onDisable();
+                onEnable();
+                msg(sender,"&aPlugin reloaded!");
+            }
+            case "set" -> {
+                if (args.length < 2) {
+                    msg(sender,"&cYou have to specify a player!");
+                    break;
+                }
+                Player player = getServer().getPlayerExact(args[1]);
+                if (player == null) {
+                    msg(sender,"&cCould not find that player!");
+                    break;
+                }
+                try {
+                    int time = args.length < 3 ? 0 : Integer.parseInt(args[2]);
+                    lastShowers.put(player.getUniqueId(),now().minusMinutes(time));
+                } catch (Exception e) {msg(sender,"&cInvalid number!");}
+            }
+            default -> msg(sender,"&6&m                                        \n"
+                    + "&6[TakeAShowerGamers] &7" + getDescription().getVersion() + "\n"
+                    + " &7- &6/shower\n"
+                    + "   &8| &eThis help page\n"
+                    + " &7- &6/shower reload\n"
+                    + "   &8| &eReload the plugin\n"
+                    + " &7- &6/shower set <player> [minutes]\n"
+                    + "   &8| &eSet a player's last shower delay or reset it\n"
+                    + "&6&m                                        ");
+        }
+
+        return true;
+    }
 }

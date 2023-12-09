@@ -1,0 +1,10 @@
+minutes-delay: 15
+sound: BLOCK_NOTE_BLOCK_PLING
+
+# Ran when a player doesn't take a shower in time
+commands:
+  - "effect give %player_name% unluck infinite 255 true"
+
+# Ran when a player takes a shower
+commands-on-shower:
+  - "effect clear %player_name% unluck"

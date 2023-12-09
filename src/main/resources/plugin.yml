@@ -1,7 +1,14 @@
 name: TakeAShowerGamers
 version: '${version}'
 main: io.github.tanguygab.takeashowergamers.TakeAShowerGamers
-api-version: '1.20'
-softdepend: [TouchGrass, GetALife]
+api-version: 1.20
+softdepend: [TouchGrass, GetALife] # not actual plugins :D (yet...)
 authors: [Tanguygab]
+depend: [PlaceholderAPI]
 description: Gamers, you gotta take some showers people
+commands:
+  takeashowergamers:
+    permission: takeashowergamers.admin
+    aliases:
+      - tasg
+      - shower
